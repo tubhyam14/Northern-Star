@@ -606,7 +606,7 @@ def build_architecture_graph(
         f"dependencies, {n_tests} test modules and {n_config} configuration files."
     )
 
-    return ArchitectureResult(
+    result = ArchitectureResult(
         repo_id=repo_id,
         root="project",
         nodes=node_list,
@@ -616,6 +616,62 @@ def build_architecture_graph(
         evidence_citations=evidence_citations,
         summary=summary,
     )
+    result.mermaid = to_mermaid(result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Mermaid export (deterministic presentation of the canonical graph)
+# ---------------------------------------------------------------------------
+
+def escape_mermaid_label(label: str) -> str:
+    """Make an arbitrary label safe inside a Mermaid quoted node label.
+
+    The label is rendered as ``n1["<escaped>"]``. Inside double quotes,
+    Mermaid treats most punctuation literally, but a raw ``"`` would close
+    the label and a raw backslash/newline would corrupt the diagram, so:
+    backslash → ``\\\\``, double quote → ``#quot;`` (Mermaid entity),
+    CR/LF/TAB → single spaces. Everything else (brackets, parens,
+    ampersands, Unicode, ...) passes through untouched.
+    """
+    text = label.replace("\\", "\\\\")
+    text = text.replace('"', "#quot;")
+    text = re.sub(r"[\r\n\t]+", " ", text)
+    return text
+
+
+def mermaid_node_ids(node_ids: list[str]) -> dict[str, str]:
+    """Map architecture node IDs → stable Mermaid-safe IDs (n1..nN).
+
+    Input order is irrelevant: IDs are assigned over the sorted node list,
+    so identical graphs always produce identical mappings.
+    """
+    return {nid: f"n{i}" for i, nid in enumerate(sorted(set(node_ids)), start=1)}
+
+
+def to_mermaid(result: "ArchitectureResult") -> str:
+    """Serialize an ArchitectureResult to a ``flowchart TD`` diagram.
+
+    Generated from the FINAL node/edge lists only — no extra nodes, no
+    dangling edges. Deterministic: sorted nodes, sorted edges.
+    """
+    mapping = mermaid_node_ids([n.id for n in result.nodes])
+    by_id = {n.id: n for n in result.nodes}
+    lines = ["flowchart TD"]
+    for nid in sorted(mapping):
+        node = by_id[nid]
+        label = escape_mermaid_label(f"{node.label} [{node.type}]"
+                                     if node.type not in ("project",) else node.label)
+        lines.append(f'{mapping[nid]}["{label}"]')
+    for edge in sorted(result.edges,
+                       key=lambda e: (e.source, e.target, e.relationship)):
+        src = mapping.get(edge.source)
+        dst = mapping.get(edge.target)
+        if src is None or dst is None:
+            continue  # never emit dangling edges
+        rel = escape_mermaid_label(edge.relationship)
+        lines.append(f'{src} -->|"{rel}"| {dst}')
+    return "\n".join(lines) + "\n"
 
 
 def _chunks_for_repo(

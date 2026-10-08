@@ -356,3 +356,147 @@ class TestCli:
         out = capsys.readouterr().out
         assert "Repository Architecture" in out
         assert repo_id in out
+
+
+# ---------------------------------------------------------------------------
+# Mermaid export tests (presentation only; JSON graph stays canonical)
+# ---------------------------------------------------------------------------
+
+class TestMermaid:
+    def test_generated_and_shaped(self, demo_repo):
+        from app.services.architecture import to_mermaid
+        settings, repo_id = demo_repo
+        result = build_architecture_graph(repo_id, settings=settings)
+        assert result.mermaid is not None
+        assert result.mermaid.startswith("flowchart TD\n")
+        assert result.mermaid == to_mermaid(result)
+
+    def test_edge_types_rendered(self, demo_repo):
+        settings, repo_id = demo_repo
+        result = build_architecture_graph(repo_id, settings=settings)
+        assert '-->|"contains"|' in result.mermaid
+        assert '-->|"imports"|' in result.mermaid
+        assert '-->|"tests"|' in result.mermaid
+
+    def test_deterministic(self, demo_repo):
+        settings, repo_id = demo_repo
+        first = build_architecture_graph(repo_id, settings=settings).mermaid
+        second = build_architecture_graph(repo_id, settings=settings).mermaid
+        assert first == second
+
+    def test_stable_node_ids(self):
+        from app.services.architecture import mermaid_node_ids
+        mapping = mermaid_node_ids(["file:b.py", "project", "file:a.py"])
+        assert mapping == {"file:a.py": "n1", "file:b.py": "n2", "project": "n3"}
+        # Input order is irrelevant.
+        assert mermaid_node_ids(["project", "file:a.py", "file:b.py"]) == mapping
+
+    def test_escaping(self):
+        from app.services.architecture import escape_mermaid_label
+        assert escape_mermaid_label('a"b') == "a#quot;b"
+        assert escape_mermaid_label("a\\b") == "a\\\\b"
+        assert escape_mermaid_label("a\nb\rc\td") == "a b c d"
+        # Pass-through: brackets, parens, ampersands, unicode, spaces.
+        label = "dir (v2) [draft] & café — 100%"
+        assert escape_mermaid_label(label) == label
+
+    def test_tricky_filenames_in_graph(self, no_default_storage: Path):
+        settings, repo_id = _setup_indexed_repo(
+            no_default_storage, {
+                "weird dir/qu(ot)e\"d [x] & café.py":
+                    "from weird_pkg import thing\n",
+                "weird_pkg/__init__.py": "thing = 1\n",
+            })
+        result = build_architecture_graph(repo_id, settings=settings)
+        assert "#quot;" in result.mermaid
+        assert "café" in result.mermaid
+        # Every Mermaid edge references a declared Mermaid node.
+        declared = set()
+        for line in result.mermaid.splitlines()[1:]:
+            if line.startswith("n") and "-->" not in line:
+                declared.add(line.split("[", 1)[0])
+        for line in result.mermaid.splitlines()[1:]:
+            if "-->" in line:
+                src, rest = line.split("-->", 1)
+                dst = rest.rsplit("|", 1)[-1].strip()
+                assert src.strip() in declared
+                assert dst in declared
+
+    def test_no_dangling_edges_and_max_nodes(self, demo_repo):
+        settings, repo_id = demo_repo
+        result = build_architecture_graph(
+            repo_id, settings=settings, max_nodes=5)
+        declared = set()
+        for line in result.mermaid.splitlines()[1:]:
+            if "-->" not in line:
+                declared.add(line.split("[", 1)[0])
+        assert len(declared) == result.total_nodes <= 5
+        for line in result.mermaid.splitlines()[1:]:
+            if "-->" in line:
+                src, rest = line.split("-->", 1)
+                dst = rest.rsplit("|", 1)[-1].strip()
+                assert src.strip() in declared and dst in declared
+
+    def test_json_backward_compatible(self, demo_repo):
+        settings, repo_id = demo_repo
+        result = build_architecture_graph(repo_id, settings=settings)
+        dumped = result.model_dump(mode="json")
+        # All pre-existing fields still present and unchanged in shape.
+        for field in ("repo_id", "root", "nodes", "edges", "total_nodes",
+                      "total_edges", "evidence_citations", "summary"):
+            assert field in dumped
+        assert dumped["total_nodes"] == len(dumped["nodes"])
+        assert isinstance(dumped["mermaid"], str)
+        assert ArchitectureResult.model_validate(dumped).mermaid.startswith(
+            "flowchart TD")
+
+
+class TestMermaidApi:
+    def test_default_json_unchanged(self, demo_repo):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        settings, repo_id = demo_repo
+        owner, repo = repo_id.split("/")
+        resp = TestClient(app).get(f"/api/v1/repos/{owner}/{repo}/architecture")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_nodes"] == len(body["nodes"])
+        assert body["mermaid"].startswith("flowchart TD")
+
+    def test_format_mermaid_plain_text(self, demo_repo):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        settings, repo_id = demo_repo
+        owner, repo = repo_id.split("/")
+        resp = TestClient(app).get(
+            f"/api/v1/repos/{owner}/{repo}/architecture?format=mermaid")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/plain")
+        assert resp.text.startswith("flowchart TD")
+
+    def test_invalid_format_422(self, demo_repo):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        settings, repo_id = demo_repo
+        owner, repo = repo_id.split("/")
+        resp = TestClient(app).get(
+            f"/api/v1/repos/{owner}/{repo}/architecture?format=png")
+        assert resp.status_code == 422
+
+
+class TestMermaidCli:
+    def test_mermaid_only(self, demo_repo, capsys):
+        from app.cli import main
+        settings, repo_id = demo_repo
+        assert main(["architecture", repo_id, "--mermaid"]) == 0
+        out = capsys.readouterr().out
+        assert out.startswith("flowchart TD")
+        assert "Repository Architecture" not in out
+
+    def test_json_includes_mermaid(self, demo_repo, capsys):
+        import json as _json
+        from app.cli import main
+        settings, repo_id = demo_repo
+        assert main(["architecture", repo_id, "--json"]) == 0
+        body = _json.loads(capsys.readouterr().out)
+        assert body["mermaid"].startswith("flowchart TD")

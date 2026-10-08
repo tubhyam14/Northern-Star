@@ -523,6 +523,9 @@ def _cmd_architecture(args) -> int:
         settings=settings,
         max_nodes=args.max_nodes,
     )
+    if args.mermaid:
+        print(result.mermaid or "flowchart TD", end="")
+        return 0
     if args.json:
         return _emit_json(ArchitectureResult.model_validate(result).model_dump(mode="json"))
 
@@ -811,6 +814,7 @@ def build_parser():
     p = sub.add_parser("architecture", help="show the deterministic repository architecture graph")
     p.add_argument("repo", metavar="owner/repo")
     p.add_argument("--max-nodes", type=int, default=None, help="max graph nodes (default 200)")
+    p.add_argument("--mermaid", action="store_true", help="print only the Mermaid flowchart source")
     common(p)
     p.set_defaults(handler=_cmd_architecture)
 

@@ -12,4 +12,6 @@ backend/storage/
 # Editors / OS
 .idea/
 .vscode/
-.DS_Storenode_modules/
+.DS_Store
+node_modules/
+frontend/dist/

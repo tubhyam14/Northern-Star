@@ -646,6 +646,35 @@ groups distinctly.
 
 ---
 
+### Mermaid Architecture Visualization
+
+The M7.1 structured architecture JSON (`nodes` / `edges` with `evidence_ids`)
+is the canonical graph. Mermaid is a deterministic presentation/export of that
+same graph — visualization only, never the evidence record. Frontends can
+render the returned Mermaid source with any Mermaid-compatible renderer.
+
+Every JSON response now also carries a `"mermaid"` field (`flowchart TD`
+source generated from the final, `max_nodes`-filtered graph, so it never
+contains nodes or edges outside the returned result):
+
+```bash
+GET /api/v1/repos/pallets/flask/architecture?max_nodes=100&format=json     # JSON + "mermaid"
+GET /api/v1/repos/pallets/flask/architecture?max_nodes=100&format=mermaid   # text/plain Mermaid only
+```
+
+```bash
+.venv/bin/python -m app.cli architecture pallets/flask --mermaid   # Mermaid source only
+.venv/bin/python -m app.cli architecture pallets/flask --json      # JSON incl. "mermaid"
+```
+
+Node IDs are assigned as `n1..nN` over the sorted node list (raw paths are
+never used as identifiers); labels are the original names with `"`,
+backslashes, and line breaks escaped. Edge labels reuse the existing
+relationship names (`contains`, `imports`, `tests`, …) — no new relationships
+are invented.
+
+---
+
 ## Limitations (v0.3)
 
 - **Lexical retrieval only.** FTS5 matches words, not meaning. Synonyms and

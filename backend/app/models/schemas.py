@@ -457,6 +457,10 @@ class ArchitectureResult(BaseModel):
     total_edges: int = 0
     evidence_citations: list[Citation] = Field(default_factory=list)
     summary: str = ""
+    # Mermaid flowchart source: a deterministic presentation/export of the
+    # graph above. Visualization only — the nodes/edges lists remain the
+    # canonical, evidence-bearing source of truth.
+    mermaid: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

@@ -252,8 +252,10 @@ class TestAsk:
 
 class TestVersion:
     def test_version_prints_app_version(self, capsys):
+        from app.main import APP_VERSION
+
         assert main(["version"]) == 0
-        assert capsys.readouterr().out.strip() == "0.3.0"
+        assert capsys.readouterr().out.strip() == APP_VERSION
 
 
 class TestClaims:

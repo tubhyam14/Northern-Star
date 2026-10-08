@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from ..config import get_settings
@@ -441,14 +442,21 @@ def generate_improvements_endpoint(
 
 @router.get(
     "/repos/{owner}/{repo}/architecture",
-    response_model=ArchitectureResult,
     summary="Get a deterministic architecture graph for a repository",
+    responses={
+        200: {
+            "description": "ArchitectureResult JSON by default; "
+            "text/plain Mermaid source when format=mermaid",
+        }
+    },
 )
 def get_repository_architecture(
     owner: str,
     repo: str,
     max_nodes: int = Query(None, ge=2, le=2000, description="Max graph nodes (default 200)"),
-) -> ArchitectureResult:
+    format: Literal["json", "mermaid"] = Query(
+        "json", description="Response shape: structured JSON or text/plain Mermaid"),
+):
     repo_dir, settings = _repo_dir(owner, repo)
     if not (repo_dir / settings.manifest_filename).exists():
         raise HTTPException(
@@ -456,13 +464,16 @@ def get_repository_architecture(
         )
     repo_id = f"{owner.lower()}/{repo.lower()}"
     try:
-        return architecture_service.build_architecture_graph(
+        result = architecture_service.build_architecture_graph(
             repo_id=repo_id,
             settings=settings,
             max_nodes=max_nodes,
         )
     except RepoNotIndexedError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    if format == "mermaid":
+        return PlainTextResponse(result.mermaid or "flowchart TD\n")
+    return result
 
 
 # ---------------------------------------------------------------------------
