@@ -1,75 +1,70 @@
-# React + TypeScript + Vite
+# Northern Star — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite product UI for Northern Star: AI that understands,
+evaluates, challenges, and improves software projects.
 
-Currently, two official plugins are available:
+Dark-first developer-tool aesthetic. No router dependency (state-driven views),
+no state-management framework; the Mermaid diagram bundle is lazy-loaded so
+first paint stays fast.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Views
 
-## React Compiler
+Home (pipeline + feature cards) · Discover (GitHub search → Analyze) ·
+Analyze Project (ingest with staged progress + repo dashboard) · Ask
+(evidence-grounded Q&A) · Architecture (Mermaid graph + filters) · Verify
+Claims · Judge (0–100 report) · Challenges (severity-filtered red team) ·
+Improvements (problem → evidence → recommendation) · Trends (popular vs
+emerging + per-repo history).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Every data view has loading skeletons, human-readable errors with retry, and
+informative empty states. AI text and repository evidence are visually
+separated everywhere; growth numbers render only where snapshots exist.
 
-## Expanding the ESLint configuration
+## Setup
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+cd frontend
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Requires Node 18+.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Run
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+The UI talks to the backend at `http://127.0.0.1:8000/api/v1` by default.
+Start the backend first (see `../backend/README.md`), then:
+
+```bash
+npm run dev        # dev server with HMR
+```
+
+To point at a different backend:
+
+```bash
+VITE_API_BASE=http://host:port/api/v1 npm run dev
+```
+
+## Build & lint
+
+```bash
+npm run build      # tsc + vite build → dist/
+npm run lint       # eslint
+```
+
+## Structure
 
 ```
+src/
+├── api.ts            # Typed client for all 15 backend endpoints + apiError()
+├── App.tsx           # Shell: sidebar nav, repo context, view routing
+├── components/ui.tsx # Cards, badges, skeletons, empty/error states, evidence cards
+├── views/            # One file per view (Home, Discover, Analyze, Ask, …)
+├── main.tsx          # Entry point
+└── index.css         # Tailwind v4 + base theme
+```
+
+## Demo flow
+
+Analyze (`pallets/flask` is pre-ingested) → Architecture → Ask → Verify →
+Judge → Challenges → Improvements → Trends. Set `GITHUB_TOKEN` on the
+backend for higher discovery rate limits.

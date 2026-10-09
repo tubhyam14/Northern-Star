@@ -1,7 +1,7 @@
-# Northern Star — v0.3 Backend (Ingestion + Evidence Index + Evidence-Grounded Q&A)
+# Northern Star — Backend (v0.8.1)
 
-**Northern Star** is a software intelligence platform.
-v0.3 covers the pipeline through evidence-grounded Q&A:
+**Northern Star** is a software intelligence platform: AI that understands,
+evaluates, challenges, and improves software projects.
 
 ```
 GitHub URL
@@ -12,17 +12,26 @@ GitHub URL
   → chunk source/config/docs into evidence segments
   → store chunks in a SQLite FTS5 index
   → lexical retrieval with exact file:line provenance
-  → grounded Q&A against a local Ollama model,
-    answering ONLY from retrieved evidence with validated [E#] citations
+  → grounded Q&A against a local Ollama model (validated [E#] citations)
+  → claim verification → 5-dimension judging → red-team challenges
+  → improvement recommendations → deterministic architecture graph
+  → GitHub discovery + historical trend intelligence
 ```
 
+Core principle: **LLMs reason; evidence determines what can be claimed.**
 Everything from ingestion through retrieval is deterministic and locally
 runnable, with *provenance on every piece of retrieved evidence*. The LLM
-(v0.3) sits *on top of* retrieval — never instead of it. Northern Star must
+sits *on top of* retrieval — never instead of it. Northern Star must
 never be "an LLM reading a repository and inventing answers": the retrieval
 layer supplies the evidence, the model cites it by `[E#]` label, and every
 citation in an answer is validated against the evidence that was actually
 provided.
+
+Milestone map: M1 ingestion · M2 indexing + BM25 · M3 grounded Q&A · M3.1
+citation hardening · M4 claim verification · M4.1 claim hardening · M5
+project judging · M6 red-team challenges · M7 improvements · M7.1
+architecture graph (+ Mermaid export) · M8.1 GitHub discovery · M8.2 trend
+snapshots and growth comparison. Details for each live in the sections below.
 
 ---
 
@@ -60,23 +69,19 @@ backend/
 │       ├── detection.py       # Deterministic language/framework detection
 │       ├── ingestion.py       # Orchestrates clone → analyse → persist manifest
 │       ├── chunking.py        # M2: line-based evidence chunking
-│       ├── indexing.py        # M2: SQLite evidence index (schema + build)
+│       ├── indexing.py        # M2/M8.2: SQLite index (evidence + snapshots)
 │       ├── retrieval.py       # M2: FTS5 search + BM25 ranking
 │       ├── prompts.py         # M3: grounding rules + [E#] evidence formatting
 │       ├── llm.py             # M3: Ollama /api/chat client (typed errors)
-│       └── qa.py              # M3: Q&A orchestrator + citation validation
-├── tests/
-│   ├── conftest.py
-│   ├── test_detection.py
-│   ├── test_github.py
-│   ├── test_ingestion.py
-│   ├── test_api.py
-│   ├── test_chunking.py       # M2
-│   ├── test_indexing.py       # M2
-│   ├── test_retrieval.py      # M2
-│   ├── test_prompts.py        # M3
-│   ├── test_llm.py            # M3
-│   └── test_qa.py             # M3
+│       ├── qa.py              # M3/M3.1: Q&A orchestrator + citation validation
+│       ├── claims.py          # M4/M4.1: claim verification
+│       ├── judge.py           # M5: five-dimension project judging
+│       ├── challenges.py      # M6: red-team challenge engine
+│       ├── improvements.py    # M7: evidence-backed recommendations
+│       ├── architecture.py    # M7.1: deterministic graph + Mermaid export
+│       ├── discovery.py       # M8.1: GitHub REST client + search/trending
+│       └── trends.py          # M8.2: snapshot store + growth comparison
+├── tests/                     # 431 tests (see Running the tests)
 ├── requirements.txt
 └── README.md
 ```
@@ -102,7 +107,7 @@ Health check:
 
 ```bash
 curl http://127.0.0.1:8000/health
-# → {"status":"ok","service":"northern-star","version":"0.3.0"}
+# → {"status":"ok","service":"northern-star","version":"0.8.1"}
 ```
 
 ---
@@ -493,7 +498,7 @@ anchored in retrieved evidence. Empty retrieval renders
 .venv/bin/python -m pytest backend/tests/ -v
 ```
 
-**377 tests**, ~5 seconds (discovery tests run against a mocked httpx
+**431 tests**, ~7 seconds (discovery/trend tests run against a mocked httpx
 transport; only the Q&A/verify/judge/challenge/improvement paths need Ollama,
 and those tests use a stub LLM).
 Coverage includes: chunk generation + line-number correctness + small/large
@@ -675,7 +680,7 @@ are invented.
 
 ---
 
-## Limitations (v0.3)
+## Limitations
 
 - **Lexical retrieval only.** FTS5 matches words, not meaning. Synonyms and
   paraphrases ("auth" ≠ "authentication") are missed; the Q&A evidence budget
@@ -716,18 +721,14 @@ are invented.
 
 ---
 
-## What's next: Milestone 4 (planned, not implemented)
+## Current status and roadmap
 
-M4 will move past *answering questions* toward *evaluating the project* using
-the same evidence discipline:
+Shipped: M1–M8.2 (ingestion through trend intelligence) plus the Mermaid
+architecture export, a FastAPI service, an in-process CLI mirroring every
+endpoint, and a React frontend (`../frontend`) consuming the API.
 
-1. **Fact-checking claims** — validate `readme_claims` against the evidence
-   index (rank, then verify with the same citation machinery).
-2. **Judging** — structured assessments (design, security, performance,
-   maintainability) where every claim is backed by evidence and every gap is
-   stated as "evidence insufficient".
-3. **Optional semantic retrieval** — embeddings layered on FTS5 to close the
-   synonym gap, reusing this milestone's retrieval queries as a re-ranker.
-
-M3 deliberately stops at single-shot, evidence-grounded Q&A. No embeddings,
-no agents, no multi-turn conversation, no judging.
+Deliberately out of scope: embeddings, agents, multi-turn conversation,
+background schedulers, vector/external databases, and private-repository
+support. Semantic retrieval over FTS5 remains the most likely next
+retrieval upgrade; anything added must preserve the evidence discipline
+above and keep the full test suite green.
